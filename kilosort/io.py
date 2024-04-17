@@ -18,6 +18,7 @@ from kilosort.postprocessing import (
     )
 
 _torch_warning = ".*PyTorch does not support non-writable tensors"
+from kilosort.artifacts_utils.artifact_processing  import zero_artifact
 
 
 def find_binary(data_dir: Union[str, os.PathLike]) -> Path:
@@ -653,6 +654,10 @@ class BinaryFiltered(BinaryRWFile):
         self.do_CAR = do_CAR
         self.invert_sign=invert_sign
         self.artifact_threshold = artifact_threshold
+        
+        if self.artifact_threshold < np.inf:
+            print('I will blank artifact larger than ', self.artifact_threshold)
+        
 
     def filter(self, X, ops=None, ibatch=None):
         # pick only the channels specified in the chanMap
@@ -677,7 +682,7 @@ class BinaryFiltered(BinaryRWFile):
             if torch.any(torch.abs(X) >= self.artifact_threshold):
                 # Assume the batch contains a recording artifact.
                 # Skip subsequent preprocessing, zero-out the batch.
-                return torch.zeros_like(X)
+                X = zero_artifact(X, self.fs,thres=self.artifact_threshold, window_size=1.5)
 
         # whitening, with optional drift correction
         if self.whiten_mat is not None:

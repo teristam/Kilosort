@@ -16,6 +16,7 @@ from kilosort import (
     PROBE_DIR
 )
 from kilosort.parameters import DEFAULT_SETTINGS
+from kilosort.artifacts_utils.artifact_processing import remove_artifact_spikes
 
 
 def run_kilosort(settings, probe=None, probe_name=None, filename=None,
@@ -140,8 +141,9 @@ def run_kilosort(settings, probe=None, probe_name=None, filename=None,
     # Sort spikes and save results
     st, tF, _, _ = detect_spikes(ops, device, bfile, tic0=tic0,
                                  progress_bar=progress_bar)
-    clu, Wall = cluster_spikes(st, tF, ops, device, bfile, tic0=tic0,
+    clu, st, tF, Wall = cluster_spikes(st, tF, ops, device, bfile, tic0=tic0,
                                progress_bar=progress_bar)
+    
     ops, similar_templates, is_ref, est_contam_rate = \
         save_sorting(ops, results_dir, st, clu, tF, Wall, bfile.imin, tic0,
                      save_extra_vars=save_extra_vars)
@@ -420,6 +422,10 @@ def cluster_spikes(st, tF, ops, device, bfile, tic0=np.nan, progress_bar=None):
                                   progress_bar=progress_bar)
     print(f'{clu.max()+1} clusters found, in {time.time()-tic : .2f}s; ' + 
             f'total {time.time()-tic0 : .2f}s')
+    
+    if ops['settings'].get('remove_artifact_spikes'):
+        print('\nRemoving contaiminated spikes')
+        clu, st, tF = remove_artifact_spikes(clu,st,tF)
 
     tic = time.time()
     print('\nMerging clusters')
@@ -431,7 +437,8 @@ def cluster_spikes(st, tF, ops, device, bfile, tic0=np.nan, progress_bar=None):
 
     bfile.close()
 
-    return clu, Wall
+    assert len(clu)==st.shape[0], 'cluster and spike time do not match'
+    return clu, st, tF, Wall
 
 
 def save_sorting(ops, results_dir, st, clu, tF, Wall, imin, tic0=np.nan,
